@@ -6,14 +6,19 @@
 #include <string>
 #include <sstream>
 
+#include <omp.h>
+
+
 // screen dimensions
 constexpr unsigned screenWidth = 1920;
 constexpr unsigned screenHeight = 950;
 constexpr float aspectRatio = float(screenWidth) / float(screenHeight);
 
-constexpr sf::Vector2u cell_grid_dimensions(15 * aspectRatio, 15);
+constexpr int cellsY = 15;
+constexpr int cellsX = cellsY * aspectRatio;
 
-int multiplier = 7;
+constexpr float cell_size = screenWidth / cellsX;
+
 bool invert = false;
 
 
@@ -63,7 +68,7 @@ float randfloat(float start, float end)
 }
 
 
-void generatePixelsArray(sf::VertexArray* pixels, const int screenWidth, const int screenHeight) 
+void generatePixelsArray(sf::VertexArray& pixels, const int screenWidth, const int screenHeight) 
 {
     // this function generates a vertex array for all the pixels on the screen
     for (int x = 0; x < screenWidth; x++) 
@@ -71,13 +76,13 @@ void generatePixelsArray(sf::VertexArray* pixels, const int screenWidth, const i
         for (int y = 0; y < screenHeight; y++) 
         {
             const int current = x + y * screenWidth;
-            (*pixels)[current].position = sf::Vector2f(x, y);
-            (*pixels)[current].color = sf::Color(randint(0, 255), randint(0, 255), randint(0, 255));
+            pixels[current].position = sf::Vector2f(x, y);
+            pixels[current].color = sf::Color(randint(0, 255), randint(0, 255), randint(0, 255));
         }
     }
 }
 
-void drawGrid(sf::RenderWindow& window, std::vector<std::vector<Rectangle>> grid) {
+void drawGrid(sf::RenderWindow& window, std::vector<std::vector<Rectangle>>& grid) {
     for (std::vector<Rectangle>& row : grid) {
         for (Rectangle& rect : row) {
             sf::RectangleShape drawRect;
@@ -134,19 +139,19 @@ std::vector<std::vector<Rectangle>> generateRectangleGrid(const int cellsX, cons
     return grid;
 }
 
-sf::Vector2i wrapIndex(int indexX, int indexY, int grid_x_size, int grid_y_size) 
+sf::Vector2i wrapIndex(int indexX, int indexY) 
 {
-    if (indexX >= grid_x_size)
+    if (indexX >= cellsX)
         indexX = 0;
 
-    if (indexY >= grid_y_size)
+    if (indexY >= cellsY)
         indexY = 0;
 
 	if (indexX < 0)
-		indexX = grid_x_size - 1;
+		indexX = cellsX - 1;
 
 	if (indexY < 0)
-		indexY = grid_y_size - 1;
+		indexY = cellsY - 1;
 
     return {indexX, indexY};
 }
@@ -159,21 +164,13 @@ float distance_squared(const sf::Vector2f& pos1, const sf::Vector2f& pos2)
 }
 
 
-void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& grid) 
+void colorPixles(sf::VertexArray& pixels, std::vector<sf::Vector2f>& point_positions, std::vector<std::vector<Rectangle>>& grid) 
 {
-    // pre fetching information about the grid
-	int grid_x_size = grid.size();
-	int grid_y_size = grid[0].size();
-
-	float grid_width = grid[0][0].w;
-	float grid_height = grid[0][0].h;
-
     // The furthest distance any particle can be from a point is if the particle is in the middle of its cell and all points
     // around it are at their furthest corners, the left, right, up, down cells ill always be closer than the diagonal ones
-	float max_dist = (grid_width * 1.f);
-	max_dist = max_dist * max_dist;
 
     // for each pixel on the screen
+#pragma omp parallel for schedule(static)
     for (int x = 0; x < screenWidth; x++) 
     {
         for (int y = 0; y < screenHeight; y++) 
@@ -183,19 +180,20 @@ void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& g
             sf::Vector2f currentPos = pixels[idx].position;
 
 			// calculating the grid cell index of the current pixel
-            int idxX = (int)(currentPos.x / grid_width);
-            int idxY = (int)(currentPos.y / grid_height);
+            int idxX = (int)(currentPos.x / cell_size);
+            int idxY = (int)(currentPos.y / cell_size);
 
 			// The color of the pixel is determined by the distance to the closest point in the grid.
-            float closestDist = max_dist;
+            float closestDist = cell_size * cell_size;
 
             for (int i = -1; i <= 1; i++) 
             {
                 for (int j = -1; j <= 1; j++) 
                 {
-                    sf::Vector2i index = wrapIndex(idxX + i, idxY + j, grid_x_size, grid_y_size);
+                    sf::Vector2i index = wrapIndex(idxX + i, idxY + j);
+					int pointIndex = index.x + index.y * cellsX;
 
-                    float newDist = distance_squared(currentPos, grid[index.x][index.y].iPos);
+                    float newDist = distance_squared(currentPos, point_positions[pointIndex]);
 
                     if (newDist < closestDist)
                         closestDist = newDist;
@@ -203,7 +201,7 @@ void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& g
             }
 
             // mapping the dist between 0 and 255
-            int col = (closestDist / max_dist) * 255;
+            int col = (closestDist / (cell_size * cell_size)) * 255;
 
             if (invert == true) col = 255 - col;
             col = std::clamp(col, 0, 255);
@@ -215,8 +213,16 @@ void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& g
     }
 }
 
+void update_point_positions(std::vector<sf::Vector2f>& point_positions, std::vector<std::vector<Rectangle>>& grid) {
+	for (size_t i = 0; i < cellsX; i++) {
+		for (size_t j = 0; j < cellsY; j++) {
+			point_positions[i + j * cellsX] = grid[i][j].iPos;
+		}
+	}
+}
 
-int main() {
+int main() 
+{
     // setting up the window, FPS, and whatnot
     sf::RenderWindow window(sf::VideoMode({ screenWidth, screenHeight }), "Organic Noise");
     sf::Clock clock;
@@ -227,11 +233,14 @@ int main() {
 
     // the pixles array
     sf::VertexArray pixels(sf::PrimitiveType::Points, screenWidth * screenHeight);
-    std::vector<std::vector<Rectangle>> grid = generateRectangleGrid(cell_grid_dimensions.x, cell_grid_dimensions.y,
+    std::vector<std::vector<Rectangle>> grid = generateRectangleGrid(cellsX, cellsY,
         0, 0, screenWidth, screenHeight);
 
-    generatePixelsArray(&pixels, screenWidth, screenHeight);
-    colorPixles(pixels, grid);
+    std::vector<sf::Vector2f> point_positions;
+	point_positions.resize(cellsX * cellsY);
+
+    generatePixelsArray(pixels, screenWidth, screenHeight);
+    colorPixles(pixels, point_positions, grid);
 
     bool drawg = true;
 
@@ -260,12 +269,6 @@ int main() {
                 if (key->code == sf::Keyboard::Key::S)
                     speed -= 0.1;
 
-                if (key->code == sf::Keyboard::Key::O)
-                    multiplier += 1;
-
-                if (key->code == sf::Keyboard::Key::P)
-                    multiplier -= 1;
-
                 if (key->code == sf::Keyboard::Key::Space)
                     paused = not paused;
             }
@@ -275,7 +278,8 @@ int main() {
         window.clear();
 
         updateRects(grid);
-        colorPixles(pixels, grid);
+		update_point_positions(point_positions, grid);
+        colorPixles(pixels, point_positions, grid);
 
         window.draw(pixels);
 
