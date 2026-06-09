@@ -71,9 +71,11 @@ add_executable(VoronoiNoise
     # ── Entry point
     src/main.cpp
 
+    src/simulation/simulation.cpp
+
     ${implot_SOURCE_DIR}/implot.cpp       
     ${implot_SOURCE_DIR}/implot_items.cpp 
-)
+ "src/simulation/simulation.h" "src/settings.h" "src/voronoi/rect.h" "src/voronoi/voronoi.h")
 
 
 # ── Include directories ───────────────────────────────────────────────────────
