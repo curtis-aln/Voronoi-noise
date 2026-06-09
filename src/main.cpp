@@ -9,9 +9,9 @@
 // screen dimensions
 constexpr unsigned screenWidth = 1920;
 constexpr unsigned screenHeight = 950;
+constexpr float aspectRatio = float(screenWidth) / float(screenHeight);
 
-
-constexpr sf::Vector2u cellIdx(15, 12);
+constexpr sf::Vector2u cell_grid_dimensions(15 * aspectRatio, 15);
 
 int multiplier = 7;
 bool invert = false;
@@ -63,10 +63,13 @@ float randfloat(float start, float end)
 }
 
 
-void generatePixelsArray(sf::VertexArray* pixels, const int screenWidth, const int screenHeight) {
+void generatePixelsArray(sf::VertexArray* pixels, const int screenWidth, const int screenHeight) 
+{
     // this function generates a vertex array for all the pixels on the screen
-    for (int x = 0; x < screenWidth; x++) {
-        for (int y = 0; y < screenHeight; y++) {
+    for (int x = 0; x < screenWidth; x++) 
+    {
+        for (int y = 0; y < screenHeight; y++) 
+        {
             const int current = x + y * screenWidth;
             (*pixels)[current].position = sf::Vector2f(x, y);
             (*pixels)[current].color = sf::Color(randint(0, 255), randint(0, 255), randint(0, 255));
@@ -158,23 +161,33 @@ float distance_squared(const sf::Vector2f& pos1, const sf::Vector2f& pos2)
 
 void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& grid) 
 {
+    // pre fetching information about the grid
 	int grid_x_size = grid.size();
 	int grid_y_size = grid[0].size();
 
 	float grid_width = grid[0][0].w;
 	float grid_height = grid[0][0].h;
 
+    // The furthest distance any particle can be from a point is if the particle is in the middle of its cell and all points
+    // around it are at their furthest corners, the left, right, up, down cells ill always be closer than the diagonal ones
+	float max_dist = (grid_width * 1.f);
+	max_dist = max_dist * max_dist;
+
+    // for each pixel on the screen
     for (int x = 0; x < screenWidth; x++) 
     {
         for (int y = 0; y < screenHeight; y++) 
         {
-            float closestDist = 100000;
-
+            // converting the 2d index to 1d
 			int idx = y + x * screenHeight;
             sf::Vector2f currentPos = pixels[idx].position;
 
+			// calculating the grid cell index of the current pixel
             int idxX = (int)(currentPos.x / grid_width);
             int idxY = (int)(currentPos.y / grid_height);
+
+			// The color of the pixel is determined by the distance to the closest point in the grid.
+            float closestDist = max_dist;
 
             for (int i = -1; i <= 1; i++) 
             {
@@ -190,7 +203,7 @@ void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& g
             }
 
             // mapping the dist between 0 and 255
-            int col = ((int)closestDist / multiplier);
+            int col = (closestDist / max_dist) * 255;
 
             if (invert == true) col = 255 - col;
             col = std::clamp(col, 0, 255);
@@ -214,7 +227,7 @@ int main() {
 
     // the pixles array
     sf::VertexArray pixels(sf::PrimitiveType::Points, screenWidth * screenHeight);
-    std::vector<std::vector<Rectangle>> grid = generateRectangleGrid(cellIdx.x, cellIdx.y,
+    std::vector<std::vector<Rectangle>> grid = generateRectangleGrid(cell_grid_dimensions.x, cell_grid_dimensions.y,
         0, 0, screenWidth, screenHeight);
 
     generatePixelsArray(&pixels, screenWidth, screenHeight);
