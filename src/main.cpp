@@ -6,12 +6,16 @@
 #include <string>
 #include <sstream>
 
-const int screenWidth = 1250;
-const int screenHeight = 700;
-const sf::Vector2u cellIdx(15, 12);
+// screen dimensions
+constexpr unsigned screenWidth = 1920;
+constexpr unsigned screenHeight = 950;
+
+
+constexpr sf::Vector2u cellIdx(15, 12);
 
 int multiplier = 7;
 bool invert = false;
+
 
 struct Rectangle {
     float x{};
@@ -37,21 +41,24 @@ struct Rectangle {
     }
 };
 
-void setCaption(sf::RenderWindow& window, sf::Clock& clock) {
+void setCaption(sf::RenderWindow& window, sf::Clock& clock) 
+{
     // FPS management
     float timePerFrame = clock.restart().asSeconds();
 
     std::ostringstream oss;
-    oss << "Organic Noise | Fps:" << 1.0f / timePerFrame << "";
+    oss << "Voronoi Noise | fps:" << 1.0f / timePerFrame << "";
     std::string var = oss.str();
     window.setTitle(var);
 }
 
-int randint(int start, int end) {
+int randint(int start, int end) 
+{
     return rand() % (end - start) + start;
 }
 
-float randfloat(float start, float end) {
+float randfloat(float start, float end) 
+{
     return (float(rand()) / float((RAND_MAX)) * (end - start)) + start;
 }
 
@@ -124,38 +131,59 @@ std::vector<std::vector<Rectangle>> generateRectangleGrid(const int cellsX, cons
     return grid;
 }
 
-sf::Vector2i wrapIndex(int indexX, int indexY, std::vector<std::vector<Rectangle>>& grid) {
-    if (indexX >= grid.size())
+sf::Vector2i wrapIndex(int indexX, int indexY, int grid_x_size, int grid_y_size) 
+{
+    if (indexX >= grid_x_size)
         indexX = 0;
 
-    if (indexY >= grid[0].size())
+    if (indexY >= grid_y_size)
         indexY = 0;
 
-    return sf::Vector2i(indexX, indexY);
+	if (indexX < 0)
+		indexX = grid_x_size - 1;
+
+	if (indexY < 0)
+		indexY = grid_y_size - 1;
+
+    return {indexX, indexY};
 }
 
 
-float distance(sf::Vector2f pos1, sf::Vector2f pos2) {
+float distance_squared(const sf::Vector2f& pos1, const sf::Vector2f& pos2) 
+{
     sf::Vector2f delta = pos2 - pos1;
     return (delta.x * delta.x) + (delta.y * delta.y);
 }
 
-void colorPixles(sf::VertexArray* pixels, std::vector<std::vector<Rectangle>> grid) {
-    for (int x = 0; x < screenWidth; x++) {
-        for (int y = 0; y < screenHeight; y++) {
 
+void colorPixles(sf::VertexArray& pixels, std::vector<std::vector<Rectangle>>& grid) 
+{
+	int grid_x_size = grid.size();
+	int grid_y_size = grid[0].size();
+
+	float grid_width = grid[0][0].w;
+	float grid_height = grid[0][0].h;
+
+    for (int x = 0; x < screenWidth; x++) 
+    {
+        for (int y = 0; y < screenHeight; y++) 
+        {
             float closestDist = 100000;
-            int idx = x + y * screenWidth;
-            sf::Vector2f currentPos = (*pixels)[idx].position;
 
-            int idxX = (int)(currentPos.x / grid[0][0].w);
-            int idxY = (int)(currentPos.y / grid[0][0].h);
+			int idx = y + x * screenHeight;
+            sf::Vector2f currentPos = pixels[idx].position;
 
-            for (int i = -1; i < 2; i++) {
-                for (int j = -1; j < 2; j++) {
-                    sf::Vector2i index = wrapIndex(idxX + i, idxY + j, grid);
+            int idxX = (int)(currentPos.x / grid_width);
+            int idxY = (int)(currentPos.y / grid_height);
 
-                    float newDist = distance(currentPos, grid[index.x][index.y].iPos);
+            for (int i = -1; i <= 1; i++) 
+            {
+                for (int j = -1; j <= 1; j++) 
+                {
+                    sf::Vector2i index = wrapIndex(idxX + i, idxY + j, grid_x_size, grid_y_size);
+
+                    float newDist = distance_squared(currentPos, grid[index.x][index.y].iPos);
+
                     if (newDist < closestDist)
                         closestDist = newDist;
                 }
@@ -163,12 +191,13 @@ void colorPixles(sf::VertexArray* pixels, std::vector<std::vector<Rectangle>> gr
 
             // mapping the dist between 0 and 255
             int col = ((int)closestDist / multiplier);
-            if (invert == true) col = 255 - col;
-            if (col > 255) col = 255;
-            if (col < 0) col = 0;
 
-            (*pixels)[idx].position = sf::Vector2f(x, y);
-            (*pixels)[idx].color = sf::Color(col, col, col);
+            if (invert == true) col = 255 - col;
+            col = std::clamp(col, 0, 255);
+
+            // setting the attributes
+            pixels[idx].position = sf::Vector2f{float(x), float(y)};
+            pixels[idx].color = sf::Color(col, col, col);
         }
     }
 }
@@ -189,7 +218,7 @@ int main() {
         0, 0, screenWidth, screenHeight);
 
     generatePixelsArray(&pixels, screenWidth, screenHeight);
-    colorPixles(&pixels, grid);
+    colorPixles(pixels, grid);
 
     bool drawg = true;
 
@@ -233,7 +262,7 @@ int main() {
         window.clear();
 
         updateRects(grid);
-        colorPixles(&pixels, grid);
+        colorPixles(pixels, grid);
 
         window.draw(pixels);
 
