@@ -80,14 +80,21 @@ public:
         sf::Sprite scaled(renderTex.getTexture());
         scaled.setScale({pixels_per_cell, pixels_per_cell});
         
-        blurShader.setUniform("texture", sf::Shader::CurrentTexture);
-        blurShader.setUniform("texelSize", sf::Glsl::Vec2(
-            1.0f / (float)pixel_array_size_x,
-            1.0f / (float)pixel_array_size_y
-        ));
-        blurShader.setUniform("blur_radius", .2f); // tweak this
+        if (blur)
+        {
+            blurShader.setUniform("texture", sf::Shader::CurrentTexture);
+            blurShader.setUniform("texelSize", sf::Glsl::Vec2(
+                1.0f / (float)pixel_array_size_x,
+                1.0f / (float)pixel_array_size_y
+            ));
+            blurShader.setUniform("blur_radius", .2f); // tweak this
 
-        window_->draw(scaled, &blurShader);
+            window_->draw(scaled, &blurShader);
+		}
+		else
+		{
+			window_->draw(scaled);
+		}
 
         if (drawg_ == true) {
             drawGrid();
@@ -188,6 +195,11 @@ private:
     {
         // The furthest distance any particle can be from a point is if the particle is in the middle of its cell and all points
         // around it are at their furthest corners, the left, right, up, down cells ill always be closer than the diagonal ones
+        float max_dist = cell_size * cell_size;
+
+        const sf::Vector3f in_color{ (float)inside_color.r, (float)inside_color.g, (float)inside_color.b };
+        const sf::Vector3f out_color{ (float)outside_color.r, (float)outside_color.g, (float)outside_color.b };
+        const sf::Vector3f diff = out_color - in_color;
 
         // for each pixel on the screen
 #pragma omp parallel for schedule(static)
@@ -206,7 +218,7 @@ private:
                 int idxY = (int)(currentPos.y / cell_size);
 
                 // The color of the pixel is determined by the distance to the closest point in the grid.
-                float closestDist = cell_size * cell_size;
+                float closestDist = max_dist;
 
                 for (int i = -1; i <= 1; i++)
                 {
@@ -223,14 +235,15 @@ private:
                 }
 
                 // mapping the dist between 0 and 255
-                int col = (closestDist / (cell_size * cell_size)) * 255;
-
-                if (invert_ == true) col = 255 - col;
-                col = std::clamp(col, 0, 255);
+                const float fraction = closestDist / max_dist;
+                sf::Vector3f color_float = diff * fraction + in_color;
+                sf::Color col = { (std::uint8_t)color_float.x, (std::uint8_t)color_float.y, (std::uint8_t)color_float.z };
+                
+                //if (invert_ == true) col = 255 - col;
 
                 // setting the attributes
                 pixels_[idx].position = sf::Vector2f{ float(x), float(y) };
-                pixels_[idx].color = sf::Color(col, col, col);
+                pixels_[idx].color = col;
             }
         }
     }

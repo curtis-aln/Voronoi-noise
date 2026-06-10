@@ -62,11 +62,12 @@ void Simulation::poll_events()
 
 void Simulation::setCaption()
 {
-	// FPS management
-	float timePerFrame = clock.restart().asSeconds();
+	
+    fps_smoothing.update_frame_rate();
+    const float fps = fps_smoothing.get_average_frame_rate();
 
 	std::ostringstream oss;
-	oss << "Voronoi Noise | fps:" << 1.0f / timePerFrame << "";
+	oss << "Voronoi Noise | fps:" << fps << "";
 	std::string var = oss.str();
 	window.setTitle(var);
 }

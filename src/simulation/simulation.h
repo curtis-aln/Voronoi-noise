@@ -2,6 +2,10 @@
 
 #include "../settings.h"
 #include "../voronoi/voronoi.h"
+
+#include "../utils/Camera.hpp"
+#include "../utils/smooth_frame_rates.h"
+
 #include <SFML/Graphics.hpp>
 
 
@@ -15,6 +19,8 @@ class Simulation : public SimulationSettings
 	bool paused_ = false;
 
 	Voronoi voronoi{ &window };
+
+	FrameRateSmoothing<100> fps_smoothing{};
 
 public:
 	Simulation();
