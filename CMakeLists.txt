@@ -124,3 +124,9 @@ if(MSVC)
         $<$<CONFIG:Release>:/Z7>         # embed debug info in .obj for Release (no .pdb)
     )
 endif()
+
+add_custom_command(TARGET VoronoiNoise POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/src/voronoi/blur.frag
+        $<TARGET_FILE_DIR:VoronoiNoise>/blur.frag
+)

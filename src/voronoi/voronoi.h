@@ -1,7 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
-
+#include <iostream>
 
 #include "rect.h"
 #include "../settings.h"
@@ -40,6 +40,10 @@ class Voronoi : public VoronoiSettings, public SimulationSettings
 	std::vector<std::vector<Rectangle>> grid_;
     std::vector<sf::Vector2f> point_positions;
 
+    sf::RenderTexture renderTex{ {size_t(pixel_array_size_x), size_t(pixel_array_size_y)} };
+    sf::Shader blurShader;
+    
+
 
 public:
     bool invert_ = false;
@@ -52,6 +56,12 @@ public:
         generatePixelsArray();
 
         point_positions.resize(cells_x * cells_y);
+
+        auto result = blurShader.loadFromFile("blur.frag", sf::Shader::Type::Fragment);
+        if (!result) {
+            // shader failed silently before — this is likely why nothing happened
+            std::cerr << "Shader failed to load!\n";
+        }
 	}
 
 	void update()
@@ -63,9 +73,21 @@ public:
 
 	void render()
 	{
-        sf::Transform transform{};
-        transform.scale({ pixels_per_cell, pixels_per_cell });
-        window_->draw(pixels_, transform);
+        renderTex.clear();
+        renderTex.draw(pixels_);  // draw points at 1:1
+        renderTex.display();
+
+        sf::Sprite scaled(renderTex.getTexture());
+        scaled.setScale({pixels_per_cell, pixels_per_cell});
+        
+        blurShader.setUniform("texture", sf::Shader::CurrentTexture);
+        blurShader.setUniform("texelSize", sf::Glsl::Vec2(
+            1.0f / (float)pixel_array_size_x,
+            1.0f / (float)pixel_array_size_y
+        ));
+        blurShader.setUniform("blur_radius", .2f); // tweak this
+
+        window_->draw(scaled, &blurShader);
 
         if (drawg_ == true) {
             drawGrid();

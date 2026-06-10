@@ -37,12 +37,16 @@ void Simulation::poll_events()
     while (const std::optional event = window.pollEvent())
     {
         if (event->is<sf::Event::Closed>())
-            window.close();
+        {
+			running_ = false;
+        }
 
         if (const auto* key = event->getIf<sf::Event::KeyPressed>()) {
             // key is a pointer to the KeyPressed subtype struct — guaranteed valid
             if (key->code == sf::Keyboard::Key::Escape)
-                window.close();
+            {
+				running_ = false;
+            }
 
             if (key->code == sf::Keyboard::Key::G)
                 voronoi.drawg_ = not voronoi.drawg_;
