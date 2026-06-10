@@ -50,7 +50,6 @@ void Simulation::poll_events()
             if (key->code == sf::Keyboard::Key::I)
                 voronoi.invert_ = not voronoi.invert_;
 
-         
             if (key->code == sf::Keyboard::Key::Space)
                 paused_ = not paused_;
         }

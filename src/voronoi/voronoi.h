@@ -33,7 +33,10 @@ class Voronoi : public VoronoiSettings, public SimulationSettings
 {
     sf::RenderWindow* window_;
 
-    sf::VertexArray pixels_{ sf::PrimitiveType::Points, screen_width * screen_height };
+    const int pixel_array_size_x = screen_width / pixels_per_cell;
+    const int pixel_array_size_y = screen_height / pixels_per_cell;
+
+    sf::VertexArray pixels_{ sf::PrimitiveType::Points, size_t(pixel_array_size_x) * size_t(pixel_array_size_y) };
 	std::vector<std::vector<Rectangle>> grid_;
     std::vector<sf::Vector2f> point_positions;
 
@@ -60,7 +63,9 @@ public:
 
 	void render()
 	{
-        window_->draw(pixels_);
+        sf::Transform transform{};
+        transform.scale({ pixels_per_cell, pixels_per_cell });
+        window_->draw(pixels_, transform);
 
         if (drawg_ == true) {
             drawGrid();
@@ -72,11 +77,13 @@ private:
     void generatePixelsArray()
     {
         // this function generates a vertex array for all the pixels on the screen
-        for (int x = 0; x < screen_width; x++)
+
+
+        for (int x = 0; x < pixel_array_size_x; x++)
         {
-            for (int y = 0; y < screen_height; y++)
+            for (int y = 0; y < pixel_array_size_y; y++)
             {
-                const int current = x + y * screen_width;
+                const int current = x + y * pixel_array_size_x;
                 pixels_[current].position = sf::Vector2f(x, y);
                 pixels_[current].color = sf::Color(randint(0, 255), randint(0, 255), randint(0, 255));
             }
@@ -107,8 +114,10 @@ private:
     }
 
     void updateRects() {
-        for (std::vector<Rectangle>& row : grid_) {
-            for (Rectangle& rect : row) {
+        for (std::vector<Rectangle>& row : grid_) 
+        {
+            for (Rectangle& rect : row) 
+            {
                 rect.update();
             }
         }
@@ -119,9 +128,12 @@ private:
         float v = 0.6f;
 
         // initilising and fillinng the vertex array
-        for (size_t i = 0; i < cells_x; i++) {
+        for (size_t i = 0; i < cells_x; i++) 
+        {
             std::vector<Rectangle> cellsRow;
-            for (size_t j = 0; j < cells_y; j++) {
+
+            for (size_t j = 0; j < cells_y; j++) 
+            {
                 Rectangle rect{ i * cell_size, j * cell_size, cell_size, cell_size };
                 rect.iPos = sf::Vector2f(randfloat(rect.x, rect.x + rect.w), randfloat(rect.y, rect.y + rect.h));
                 rect.iVel = sf::Vector2f(randfloat(-v, v), randfloat(-v, v));
@@ -157,13 +169,15 @@ private:
 
         // for each pixel on the screen
 #pragma omp parallel for schedule(static)
-        for (int x = 0; x < screen_width; x++)
+        for (int x = 0; x < pixel_array_size_x; x++)
         {
-            for (int y = 0; y < screen_height; y++)
+            for (int y = 0; y < pixel_array_size_y; y++)
             {
                 // converting the 2d index to 1d
-                int idx = y + x * screen_height;
+                int idx = y + x * pixel_array_size_y;
                 sf::Vector2f currentPos = pixels_[idx].position;
+				currentPos.x *= pixels_per_cell;
+				currentPos.y *= pixels_per_cell;
 
                 // calculating the grid cell index of the current pixel
                 int idxX = (int)(currentPos.x / cell_size);
